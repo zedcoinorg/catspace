@@ -8,7 +8,7 @@
         <h5 class="card-title d-inline-block" i18n="mining.miners-luck" i18n-ngbTooltip="mining.miners-luck-1w"
         ngbTooltip="Pools luck (1 week)" placement="bottom" #minersluck [disableTooltip]="!isEllipsisActive(minersluck)">Pools luck</h5>
         <p class="card-text" i18n-ngbTooltip="mining.pools-luck-desc"
-        ngbTooltip="The overall luck of all mining pools over the past week. A luck bigger than 100% means the average block time for the current epoch is less than 10 minutes." placement="bottom">
+        ngbTooltip="The overall luck of all mining pools over the past week. A luck bigger than 100% means the average block time for the current epoch is less than 2.5 minutes." placement="bottom">
           {{ miningStats['minersLuck'] }}%
         </p>
       </div>

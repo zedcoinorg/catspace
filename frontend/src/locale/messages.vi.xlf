@@ -3848,7 +3848,7 @@
         <note priority="1" from="description">mining.miners-luck</note>
       </trans-unit>
       <trans-unit id="e910ea39a964514d51802d34cad96c75b14947d1" datatype="html">
-        <source>The overall luck of all mining pools over the past week. A luck bigger than 100% means the average block time for the current epoch is less than 10 minutes.</source>
+        <source>The overall luck of all mining pools over the past week. A luck bigger than 100% means the average block time for the current epoch is less than 2.5 minutes.</source>
         <target>Vận may chung của tất cả các nhóm khai thác trong tuần qua. Một may mắn lớn hơn 100% có nghĩa là thời gian khối trung bình cho kỷ nguyên hiện tại là ít hơn 10 phút.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/components/pool-ranking/pool-ranking.component.html</context>
