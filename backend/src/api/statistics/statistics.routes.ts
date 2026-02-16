@@ -24,6 +24,9 @@ class StatisticsRoutes {
     res.setHeader('Expires', new Date(Date.now() + 1000 * 300).toUTCString());
 
     try {
+      if (!config.DATABASE.ENABLED || !config.STATISTICS.ENABLED) {
+        return res.json([]);
+      }
       let result;
       switch (time as string) {
         case '2h':

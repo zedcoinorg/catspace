@@ -219,6 +219,13 @@ main {
 	font-size: 12px;
 }
 
+.symbol.unit-narrow {
+  font-size: 11px;
+  letter-spacing: -0.02em;
+  font-stretch: condensed;
+  white-space: nowrap;
+}
+
 .progress-text {
   span {
     color: #fff !important;

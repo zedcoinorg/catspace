@@ -64,6 +64,9 @@ function downloadMiningPoolLogos() {
       try {
         const poolLogos = JSON.parse(response_body.toString());
         for (const poolLogo of poolLogos) {
+          if (!poolLogo.download_url) {
+            continue;
+          }
           download(
             `${PATH}/mining-pools/${poolLogo.name}`,
             poolLogo.download_url

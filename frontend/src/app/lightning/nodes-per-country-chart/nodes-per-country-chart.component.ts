@@ -102,7 +102,7 @@ export class NodesPerCountryChartComponent implements OnInit {
             const nodeCount = country.count.toString();
             return `<b style="color: white">${country.name.en} (${country.share}%)</b><br>` +
               $localize`${nodeCount} nodes` + `<br>` +
-              $localize`${this.amountShortenerPipe.transform(country.capacity / 100000000, 2)} LTC capacity`
+              $localize`${this.amountShortenerPipe.transform(country.capacity / 100000000, 2)} CAT capacity`
             ;
           }
         },

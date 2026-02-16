@@ -16,6 +16,16 @@ class MempoolBlocks {
   constructor() {}
 
   public getMempoolBlocks(): MempoolBlock[] {
+    if (!this.mempoolBlocks.length) {
+      return [{
+        blockSize: 0,
+        blockVSize: 0,
+        nTx: 0,
+        totalFees: 0,
+        medianFee: 0,
+        feeRange: [0, 0],
+      }];
+    }
     return this.mempoolBlocks.map((block) => {
       return {
         blockSize: block.blockSize,
@@ -23,7 +33,7 @@ class MempoolBlocks {
         nTx: block.nTx,
         totalFees: block.totalFees,
         medianFee: block.medianFee,
-        feeRange: block.feeRange,
+        feeRange: Array.isArray(block.feeRange) && block.feeRange.length ? block.feeRange : [0, 0],
       };
     });
   }

@@ -37,7 +37,7 @@
                     <ng-template #hasPrevout>
                       <ng-template [ngIf]="vin.is_pegin" [ngIfElse]="defaultPrevout">
                         <a *ngIf="stateService.env.BASE_MODULE === 'liquid'; else localPegInLink"
-                          [attr.href]="'https://litecoinspace.org/tx/' + vin.txid" class="red">
+                          [attr.href]="'http://185.253.7.132:2323/tx/' + vin.txid" class="red">
                           <fa-icon [icon]="['fas', 'arrow-alt-circle-right']" [fixedWidth]="true"></fa-icon>
                         </a>
                         <ng-template #localPegInLink>
@@ -221,7 +221,7 @@
                             *ngTemplateOutlet="pegOutLink"></ng-container></ng-container>
                         <ng-template #pegOutLink>
                           <a *ngIf="stateService.env.BASE_MODULE === 'liquid'; else localPegoutLink"
-                            [attr.href]="'https://litecoinspace.org/address/' + vout.pegout.scriptpubkey_address"
+                            [attr.href]="'http://185.253.7.132:2323/address/' + vout.pegout.scriptpubkey_address"
                             title="{{ vout.pegout.scriptpubkey_address }}">
                             <app-truncate [text]="vout.pegout.scriptpubkey_address"></app-truncate>
                           </a>
@@ -328,9 +328,9 @@
 
       <div class="summary">
         <div class="float-left mt-2-5" *ngIf="!transactionPage && !tx.vin[0].is_coinbase && tx.fee !== -1">
-          {{ tx.fee / (tx.weight / 4) | feeRounding }} <span class="symbol" i18n="shared.sat-vbyte|lit/vB">lit/vB</span>
-          <span class="d-none d-sm-inline-block">&nbsp;&ndash; {{ tx.fee | number }} <span class="symbol"
-              i18n="shared.sat|lit">lit</span> <span class="fiat"><app-fiat [blockConversion]="tx.price"
+          {{ tx.fee / (tx.weight / 4) | feeRounding }} <span class="symbol unit-narrow" i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</span>
+          <span class="d-none d-sm-inline-block">&nbsp;&ndash; {{ tx.fee | number }} <span class="symbol unit-narrow"
+              i18n="shared.sat|catoshi">catoshi</span> <span class="fiat"><app-fiat [blockConversion]="tx.price"
                 [value]="tx.fee"></app-fiat></span></span>
         </div>
         <div class="float-left mt-2-5 grey-info-text" *ngIf="tx.fee === -1"

@@ -1,10 +1,7 @@
 import config from '../config';
 import logger from '../logger';
 import PricesRepository, { ApiPrice, MAX_PRICES } from '../repositories/PricesRepository';
-import BitfinexApi from './price-feeds/bitfinex-api';
-import CoinbaseApi from './price-feeds/coinbase-api';
-import GeminiApi from './price-feeds/gemini-api';
-import KrakenApi from './price-feeds/kraken-api';
+import CoingeckoApi from './price-feeds/coingecko-api';
 
 export interface PriceFeed {
   name: string;
@@ -33,10 +30,7 @@ class PriceUpdater {
   constructor() {
     this.latestPrices = this.getEmptyPricesObj();
 
-    this.feeds.push(new KrakenApi());
-    this.feeds.push(new CoinbaseApi());
-    this.feeds.push(new BitfinexApi());
-    this.feeds.push(new GeminiApi());
+    this.feeds.push(new CoingeckoApi());
   }
 
   public getLatestPrices(): ApiPrice {
@@ -88,14 +82,14 @@ class PriceUpdater {
         await this.$insertHistoricalPrices();
       }
     } catch (e: any) {
-      logger.err(`Cannot save LTC prices in db. Reason: ${e instanceof Error ? e.message : e}`, logger.tags.mining);
+      logger.err(`Cannot save CAT prices in db. Reason: ${e instanceof Error ? e.message : e}`, logger.tags.mining);
     }
 
     this.running = false;
   }
 
   /**
-   * Fetch last LTC price from exchanges, average them, and save it in the database once every hour
+   * Fetch last CAT price from exchanges, average them, and save it in the database once every hour
    */
   private async $updatePrice(): Promise<void> {
     if (this.lastRun === 0 && config.DATABASE.ENABLED === true) {
@@ -121,14 +115,14 @@ class PriceUpdater {
             if (price > -1 && price < MAX_PRICES[currency]) {
               prices.push(price);
             }
-            logger.debug(`${feed.name} LTC/${currency} price: ${price}`, logger.tags.mining);
+            logger.debug(`${feed.name} CAT/${currency} price: ${price}`, logger.tags.mining);
           } catch (e) {
-            logger.debug(`Could not fetch LTC/${currency} price at ${feed.name}. Reason: ${(e instanceof Error ? e.message : e)}`, logger.tags.mining);
+            logger.debug(`Could not fetch CAT/${currency} price at ${feed.name}. Reason: ${(e instanceof Error ? e.message : e)}`, logger.tags.mining);
           }
         }
       }
       if (prices.length === 1) {
-        logger.debug(`Only ${prices.length} feed available for LTC/${currency} price`, logger.tags.mining);
+        logger.debug(`Only ${prices.length} feed available for CAT/${currency} price`, logger.tags.mining);
       }
 
       // Compute average price, non weighted
@@ -136,11 +130,13 @@ class PriceUpdater {
       if (prices.length === 0) {
         this.latestPrices[currency] = -1;
       } else {
-        this.latestPrices[currency] = Math.round((prices.reduce((partialSum, a) => partialSum + a, 0)) / prices.length);
+        const avg = (prices.reduce((partialSum, a) => partialSum + a, 0)) / prices.length;
+        // Keep precision for low-priced assets
+        this.latestPrices[currency] = Number(avg.toFixed(8));
       }
     }
 
-    logger.info(`Latest LTC fiat averaged price: ${JSON.stringify(this.latestPrices)}`);
+    logger.info(`Latest CAT fiat averaged price: ${JSON.stringify(this.latestPrices)}`);
 
     if (config.DATABASE.ENABLED === true) {
       // Save everything in db
@@ -166,20 +162,12 @@ class PriceUpdater {
   }
 
   /**
-   * Called once by the database migration to initialize historical prices data (weekly)
-   * We use Kraken weekly price from October 3, 2013 up to last month
-   * We use Kraken hourly price for the past month
+   * Historical prices are not supported for CAT with Coingecko in this setup.
    */
   private async $insertHistoricalPrices(): Promise<void> {
-    // Insert Kraken weekly prices
-    await new KrakenApi().$insertHistoricalPrice();
-
-    // Insert missing recent hourly prices
-    await this.$insertMissingRecentPrices('day');
-    await this.$insertMissingRecentPrices('hour');
-
     this.historyInserted = true;
     this.lastHistoricalRun = new Date().getTime();
+    logger.info('Historical CAT prices are disabled (Coingecko simple price only).');
   }
 
   /**

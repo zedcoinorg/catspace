@@ -222,7 +222,7 @@ class Server {
   
   setUpHttpApiRoutes(): void {
     bitcoinRoutes.initRoutes(this.app);
-    if (config.STATISTICS.ENABLED && config.DATABASE.ENABLED && config.MEMPOOL.ENABLED) {
+    if (config.STATISTICS.ENABLED && config.MEMPOOL.ENABLED) {
       statisticsRoutes.initRoutes(this.app);
     }
     if (Common.indexingEnabled() && config.MEMPOOL.ENABLED) {

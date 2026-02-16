@@ -8,8 +8,10 @@
     </div>
   </ng-template>
     <ng-container *ngIf="{ val: connectionState$ | async } as connectionState">
-      <app-svg-images *ngIf="!officialMempoolSpace" name="mempoolSpace" viewBox="0 0 500 126" class="mempool-logo" [ngStyle]="{'opacity': connectionState.val === 2 ? 1 : 0.5 }"></app-svg-images>
-      <app-svg-images *ngIf="officialMempoolSpace" name="officialMempoolSpace" viewBox="0 0 500 126"></app-svg-images>
+      <div class="brand" [ngStyle]="{'opacity': connectionState.val === 2 ? 1 : 0.5 }">
+        <img src="/resources/catcoin.png" alt="Catcoin" class="brand-logo">
+        <span class="brand-text">CATCOIN SPACE</span>
+      </div>
       <div class="connection-badge">
         <div class="badge badge-warning" *ngIf="connectionState.val === 0" i18n="master-page.offline">Offline</div>
         <div class="badge badge-warning" *ngIf="connectionState.val === 1" i18n="master-page.reconnecting">Reconnecting...</div>

@@ -118,7 +118,7 @@ init();`;
         return codeText;
       }
 
-      const importText = `<script src="https://litecoinspace.org/mempool.js"></script>`;
+      const importText = `<script src="http://185.253.7.132:2323/mempool.js"></script>`;
 
       let resultHtml = '<pre id="result"></pre>';
       if (this.method === 'websocket') {
@@ -179,7 +179,7 @@ yarn add @mempool/mempool.js`;
   }
 
   wrapPythonTemplate(code: any) {
-    return ( ( this.network === 'testnet' ) ? ( code.codeTemplate.python.replace( 'wss://litecoinspace.org/api/v1/ws', 'wss://litecoinspace.org/' + this.network + '/api/v1/ws' ) ) : code.codeTemplate.python );
+    return ( ( this.network === 'testnet' ) ? ( code.codeTemplate.python.replace( 'wss://185.253.7.132:2323/api/v1/ws', 'wss://185.253.7.132:2323/' + this.network + '/api/v1/ws' ) ) : code.codeTemplate.python );
   }
 
   replaceJSPlaceholder(text: string, code: any) {

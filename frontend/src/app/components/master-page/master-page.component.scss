@@ -1,5 +1,5 @@
 li.nav-item.active {
-  background-color: #4c92ff; // LTCbrand: nav bar active
+  background-color: #4c92ff; // CATbrand: nav bar active
 }
 
 fa-icon {
@@ -85,6 +85,27 @@ li.nav-item {
 .navbar-brand {
   position: relative;
   height: 65px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+}
+
+.brand-text {
+  color: #f1f1f1;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .navbar-brand.dual-logos {

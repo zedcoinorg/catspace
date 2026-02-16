@@ -135,6 +135,7 @@ class BitcoinRoutes {
       res.set('Content-Type', 'application/json');
       res.send(result);
     } catch (e) {
+      logger.err('getBlock error: ' + (e instanceof Error ? (e.stack || e.message) : e));
       res.status(500).send(e instanceof Error ? e.message : e);
     }
   }
@@ -506,7 +507,21 @@ class BitcoinRoutes {
     try {
       loadingIndicators.setProgress('blocktxs-' + req.params.hash, 0);
 
-      const txIds = await bitcoinApi.$getTxIdsForBlock(req.params.hash);
+      let txIds = await bitcoinApi.$getTxIdsForBlock(req.params.hash);
+      if (!Array.isArray(txIds)) {
+        logger.err(`Invalid txids for block ${req.params.hash}. Falling back to core RPC.`);
+        try {
+          const rpcBlock = await bitcoinClient.getBlock(req.params.hash, 1);
+          if (Array.isArray(rpcBlock?.tx)) {
+            txIds = rpcBlock.tx;
+          }
+        } catch (e) {
+          logger.err(`Fallback getBlock failed for ${req.params.hash}. Reason: ` + (e instanceof Error ? e.message : e));
+        }
+      }
+      if (!Array.isArray(txIds)) {
+        return res.status(404).send('Block transactions not available');
+      }
       const transactions: TransactionExtended[] = [];
       const startingIndex = Math.max(0, parseInt(req.params.index || '0', 10));
 

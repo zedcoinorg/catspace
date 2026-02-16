@@ -1,7 +1,7 @@
 const fs = require("fs");
 
 let PROXY_CONFIG;
-let configContent;
+let configContent = {};
 
 const CONFIG_FILE_NAME = "mempool-frontend-config.json";
 
@@ -18,24 +18,29 @@ try {
   }
 }
 
+const targetHost = configContent.NGINX_HOSTNAME || "litecoinspace.org";
+const targetPort = configContent.NGINX_PORT ? `:${configContent.NGINX_PORT}` : "";
+const targetProtocol = configContent.NGINX_PROTOCOL || "https";
+const target = `${targetProtocol}://${targetHost}${targetPort}`;
+
 PROXY_CONFIG = [
   {
     context: ["*", "/api/**", "!/api/v1/ws", "/testnet/api/**"],
-    target: "https://litecoinspace.org",
+    target,
     ws: true,
     secure: false,
     changeOrigin: true,
   },
   {
     context: ["/api/v1/ws"],
-    target: "https://litecoinspace.org",
+    target,
     ws: true,
     secure: false,
     changeOrigin: true,
   },
   {
     context: ["/resources/mining-pools/**"],
-    target: "https://litecoinspace.org",
+    target,
     secure: false,
     changeOrigin: true,
   },
@@ -45,7 +50,7 @@ PROXY_CONFIG = [
       "/resources/assets.minimal.json",
       "/resources/worldmap.json",
     ],
-    target: "https://litecoinspace.org",
+    target,
     secure: false,
     changeOrigin: true,
   },

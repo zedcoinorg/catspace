@@ -52,7 +52,7 @@ export class AppComponent implements OnInit {
   ngOnInit() {
     this.router.events.subscribe((val) => {
       if (val instanceof NavigationEnd) {
-        let domain = 'litecoinspace.org';
+        let domain = '185.253.7.132:2323';
         this.link.setAttribute('href', 'https://' + domain + this.location.path());
       }
     });

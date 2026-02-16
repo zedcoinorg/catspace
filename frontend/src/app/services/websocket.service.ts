@@ -20,7 +20,7 @@ const initData = makeStateKey('/api/v1/init-data');
 })
 export class WebsocketService {
   private webSocketProtocol = (document.location.protocol === 'https:') ? 'wss:' : 'ws:';
-  private webSocketUrl = this.webSocketProtocol + '//' + document.location.hostname + ':' + document.location.port + '{network}/api/v1/ws';
+  private webSocketUrl = '';
 
   private websocketSubject: WebSocketSubject<WebsocketResponse>;
   private goneOffline = false;
@@ -35,12 +35,18 @@ export class WebsocketService {
   private onlineCheckTimeoutTwo: number;
   private subscription: Subscription;
   private network = '';
+  private receivedFirstMessage = false;
+  private initFallbackTimeout: number;
 
   constructor(
     private stateService: StateService,
     private apiService: ApiService,
     private transferState: TransferState,
   ) {
+    const wsHost = this.stateService.env?.NGINX_HOSTNAME || document.location.hostname;
+    const wsPort = this.stateService.env?.NGINX_PORT || document.location.port;
+    const wsPortPart = wsPort ? `:${wsPort}` : '';
+    this.webSocketUrl = this.webSocketProtocol + '//' + wsHost + wsPortPart + '{network}/api/v1/ws';
     if (!this.stateService.isBrowser) {
       // @ts-ignore
       this.websocketSubject = { next: () => {}};
@@ -85,6 +91,19 @@ export class WebsocketService {
     if (!hasInitData) {
       this.stateService.isLoadingWebSocket$.next(true);
       this.websocketSubject.next({'action': 'init'});
+      this.receivedFirstMessage = false;
+      clearTimeout(this.initFallbackTimeout);
+      this.initFallbackTimeout = window.setTimeout(() => {
+        if (this.receivedFirstMessage) {
+          return;
+        }
+        this.apiService.getInitData$()
+          .pipe(take(1))
+          .subscribe((response) => {
+            this.handleResponse(response);
+            this.stateService.isLoadingWebSocket$.next(false);
+          });
+      }, 3000);
     }
     if (retrying) {
       this.stateService.connectionState$.next(1);
@@ -92,6 +111,7 @@ export class WebsocketService {
     this.subscription = this.websocketSubject
       .subscribe((response: WebsocketResponse) => {
         this.stateService.isLoadingWebSocket$.next(false);
+        this.receivedFirstMessage = true;
         this.handleResponse(response);
 
         if (this.goneOffline === true) {

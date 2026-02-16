@@ -78,7 +78,22 @@ class Blocks {
     quiet: boolean = false,
   ): Promise<TransactionExtended[]> {
     const transactions: TransactionExtended[] = [];
-    const txIds: string[] = await bitcoinApi.$getTxIdsForBlock(blockHash);
+    let txIds: string[] | undefined = await bitcoinApi.$getTxIdsForBlock(blockHash);
+    if (!Array.isArray(txIds)) {
+      logger.err(`Invalid txids for block ${blockHash} (height ${blockHeight}). Falling back to core RPC.`);
+      try {
+        const rpcBlock = await bitcoinClient.getBlock(blockHash, 1);
+        if (Array.isArray(rpcBlock?.tx)) {
+          txIds = rpcBlock.tx;
+        }
+      } catch (e) {
+        logger.err(`Fallback getBlock failed for ${blockHash}. Reason: ` + (e instanceof Error ? e.message : e));
+      }
+    }
+    if (!Array.isArray(txIds)) {
+      logger.err(`No txids available for block ${blockHash} (height ${blockHeight}).`);
+      return transactions;
+    }
 
     const mempool = memPool.getMempool();
     let transactionsFound = 0;
@@ -177,14 +192,15 @@ class Blocks {
    * @returns BlockExtended
    */
   private async $getBlockExtended(block: IEsploraApi.Block, transactions: TransactionExtended[]): Promise<BlockExtended> {
-    const coinbaseTx = transactionUtils.stripCoinbaseTransaction(transactions[0]);
+    try {
+      const coinbaseTx = transactionUtils.stripCoinbaseTransaction(transactions[0]);
     
-    const blk: Partial<BlockExtended> = Object.assign({}, block);
-    const extras: Partial<BlockExtension> = {};
+      const blk: Partial<BlockExtended> = Object.assign({}, block);
+      const extras: Partial<BlockExtension> = {};
 
-    extras.reward = transactions[0].vout.reduce((acc, curr) => acc + curr.value, 0);
-    extras.coinbaseRaw = coinbaseTx.vin[0].scriptsig;
-    extras.orphans = chainTips.getOrphanedBlocksAtHeight(blk.height);
+      extras.reward = transactions[0].vout.reduce((acc, curr) => acc + curr.value, 0);
+      extras.coinbaseRaw = coinbaseTx.vin[0].scriptsig;
+      extras.orphans = chainTips.getOrphanedBlocksAtHeight(blk.height);
 
     if (block.height === 0) {
       extras.medianFee = 0; // 50th percentiles
@@ -287,8 +303,12 @@ class Blocks {
       }
     }
 
-    blk.extras = <BlockExtension>extras;
-    return <BlockExtended>blk;
+      blk.extras = <BlockExtension>extras;
+      return <BlockExtended>blk;
+    } catch (e) {
+      logger.err(`$getBlockExtended error for block ${block?.id ?? 'unknown'}: ` + (e instanceof Error ? (e.stack || e.message) : e));
+      throw e;
+    }
   }
 
   /**
@@ -297,7 +317,7 @@ class Blocks {
    * @returns
    */
   private async $findBlockMiner(txMinerInfo: TransactionMinerInfo | undefined): Promise<PoolTag> {
-    if (txMinerInfo === undefined || txMinerInfo.vout.length < 1) {
+    if (txMinerInfo === undefined || !Array.isArray(txMinerInfo.vout) || txMinerInfo.vout.length < 1) {
       if (config.DATABASE.ENABLED === true) {
         return await poolsRepository.$getUnknownPool();
       } else {
@@ -317,8 +337,9 @@ class Blocks {
 
     for (let i = 0; i < pools.length; ++i) {
       if (addresses.length) {
-        const poolAddresses: string[] = typeof pools[i].addresses === 'string' ?
+        const poolAddressesRaw: string[] | undefined = typeof pools[i].addresses === 'string' ?
           JSON.parse(pools[i].addresses) : pools[i].addresses;
+        const poolAddresses: string[] = Array.isArray(poolAddressesRaw) ? poolAddressesRaw : [];
         for (let y = 0; y < poolAddresses.length; y++) {
           if (addresses.indexOf(poolAddresses[y]) !== -1) {
             return pools[i];
@@ -326,8 +347,9 @@ class Blocks {
         }
       }
 
-      const regexes: string[] = typeof pools[i].regexes === 'string' ?
+      const regexesRaw: string[] | undefined = typeof pools[i].regexes === 'string' ?
         JSON.parse(pools[i].regexes) : pools[i].regexes;
+      const regexes: string[] = Array.isArray(regexesRaw) ? regexesRaw : [];
       for (let y = 0; y < regexes.length; ++y) {
         const regex = new RegExp(regexes[y], 'i');
         const match = asciiScriptSig.match(regex);

@@ -22,8 +22,8 @@
         <div class="block-body">
           <ng-container *ngIf="!minimal">
             <div *ngIf="block?.extras; else emptyfees" [attr.data-cy]="'bitcoin-block-offset=' + offset + '-index-' + i + '-fees'" class="fees">
-              ~{{ block?.extras?.medianFee | number:feeRounding }} <ng-container
-                i18n="shared.sat-vbyte|lit/vB">lit/vB</ng-container>
+              ~{{ block?.extras?.medianFee | number:feeRounding }} <span class="symbol unit-narrow"><ng-container
+                i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</ng-container></span>
             </div>
             <ng-template #emptyfees>
               <div [attr.data-cy]="'bitcoin-block-offset=' + offset + '-index-' + i + '-fees'" class="fees">
@@ -33,8 +33,8 @@
             <div [attr.data-cy]="'bitcoin-block-' + offset + '-index-' + i + '-fee-span'" class="fee-span"
               *ngIf="block?.extras?.feeRange; else emptyfeespan">
               {{ block?.extras?.feeRange?.[0] | number:feeRounding }} - {{
-              block?.extras?.feeRange[block?.extras?.feeRange?.length - 1] | number:feeRounding }} <ng-container
-                i18n="shared.sat-vbyte|lit/vB">lit/vB</ng-container>
+              block?.extras?.feeRange[block?.extras?.feeRange?.length - 1] | number:feeRounding }} <span class="symbol unit-narrow"><ng-container
+                i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</ng-container></span>
             </div>
             <ng-template #emptyfeespan>
               <div [attr.data-cy]="'bitcoin-block-offset=' + offset + '-index-' + i + '-fees'" class="fee-span">

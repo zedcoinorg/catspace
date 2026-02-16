@@ -14,7 +14,7 @@ import { map, startWith, tap } from 'rxjs/operators';
 export class FeesBoxComponent implements OnInit {
   isLoading$: Observable<boolean>;
   recommendedFees$: Observable<Recommendedfees>;
-  gradient = 'linear-gradient(to right, #343434, #343434)'; // LTCbrand: tx fees skeleton
+  gradient = 'linear-gradient(to right, #343434, #343434)'; // CATbrand: tx fees skeleton
   noPriority = '#343434';
 
   constructor(

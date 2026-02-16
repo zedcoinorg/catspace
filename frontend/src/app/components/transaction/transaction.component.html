@@ -172,8 +172,8 @@
                   <app-truncate [text]="cpfpTx.txid" [link]="['/tx' | relativeUrl, cpfpTx.txid]"></app-truncate>
                 </td>
                 <td class="d-none d-lg-table-cell" [innerHTML]="cpfpTx.weight / 4 | vbytes: 2"></td>
-                <td>{{ cpfpTx.fee / (cpfpTx.weight / 4) | feeRounding }} <span class="symbol"
-                    i18n="shared.sat-vbyte|lit/vB">lit/vB</span></td>
+                <td>{{ cpfpTx.fee / (cpfpTx.weight / 4) | feeRounding }} <span class="symbol unit-narrow"
+                    i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</span></td>
                 <td class="d-none d-lg-table-cell"><fa-icon *ngIf="roundToOneDecimal(cpfpTx) > roundToOneDecimal(tx)"
                     class="arrow-green" [icon]="['fas', 'angle-double-up']" [fixedWidth]="true"></fa-icon></td>
               </tr>
@@ -187,7 +187,7 @@
                 </td>
                 <td class="d-none d-lg-table-cell" [innerHTML]="cpfpInfo.bestDescendant.weight / 4 | vbytes: 2"></td>
                 <td>{{ cpfpInfo.bestDescendant.fee / (cpfpInfo.bestDescendant.weight / 4) | feeRounding }} <span
-                    class="symbol" i18n="shared.sat-vbyte|lit/vB">lit/vB</span></td>
+                    class="symbol unit-narrow" i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</span></td>
                 <td class="d-none d-lg-table-cell"><fa-icon class="arrow-green" [icon]="['fas', 'angle-double-up']"
                     [fixedWidth]="true"></fa-icon></td>
               </tr>
@@ -200,8 +200,8 @@
                   <app-truncate [text]="cpfpTx.txid" [link]="['/tx' | relativeUrl, cpfpTx.txid]"></app-truncate>
                 </td>
                 <td class="d-none d-lg-table-cell" [innerHTML]="cpfpTx.weight / 4 | vbytes: 2"></td>
-                <td>{{ cpfpTx.fee / (cpfpTx.weight / 4) | feeRounding }} <span class="symbol"
-                    i18n="shared.sat-vbyte|lit/vB">lit/vB</span></td>
+                <td>{{ cpfpTx.fee / (cpfpTx.weight / 4) | feeRounding }} <span class="symbol unit-narrow"
+                    i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</span></td>
                 <td class="d-none d-lg-table-cell"><fa-icon *ngIf="roundToOneDecimal(cpfpTx) < roundToOneDecimal(tx)"
                     class="arrow-red" [icon]="['fas', 'angle-double-down']" [fixedWidth]="true"></fa-icon></td>
               </tr>
@@ -490,13 +490,13 @@
       <tr *ngIf="isMobile && (network === 'liquid' || network === 'liquidtestnet' || !featuresEnabled)"></tr>
       <tr>
         <td class="td-width" i18n="transaction.fee|Transaction fee">Fee</td>
-        <td>{{ tx.fee | number }} <span class="symbol" i18n="shared.sat|lit">lit</span> <span class="fiat"><app-fiat
+        <td>{{ tx.fee | number }} <span class="symbol unit-narrow" i18n="shared.sat|catoshi">catoshi</span> <span class="fiat"><app-fiat
               [blockConversion]="blockConversion" [value]="tx.fee"></app-fiat></span></td>
       </tr>
       <tr>
         <td i18n="transaction.fee-rate|Transaction fee rate">Fee rate</td>
         <td>
-          {{ tx.feePerVsize | feeRounding }} <span class="symbol" i18n="shared.sat-vbyte|lit/vB">lit/vB</span>
+          {{ tx.feePerVsize | feeRounding }} <span class="symbol unit-narrow" i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</span>
           <ng-template [ngIf]="tx?.status?.confirmed">
             &nbsp;
             <app-tx-fee-rating
@@ -510,8 +510,8 @@
         <td i18n="transaction.effective-fee-rate|Effective transaction fee rate">Effective fee rate</td>
         <td>
           <div class="effective-fee-container">
-            {{ tx.effectiveFeePerVsize | feeRounding }} <span class="symbol"
-              i18n="shared.sat-vbyte|lit/vB">lit/vB</span>
+            {{ tx.effectiveFeePerVsize | feeRounding }} <span class="symbol unit-narrow"
+              i18n="shared.sat-vbyte|catoshi/vB">catoshi/vB</span>
             <ng-template [ngIf]="tx?.status?.confirmed">
               <app-tx-fee-rating class="ml-2 mr-2" *ngIf="tx.fee || tx.effectiveFeePerVsize"
                 [tx]="tx"></app-tx-fee-rating>

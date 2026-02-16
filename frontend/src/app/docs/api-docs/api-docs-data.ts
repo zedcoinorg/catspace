@@ -86,7 +86,7 @@ def on_open(ws):
     ws.send(json.dumps(message))
 
 if __name__ == "__main__":
-    ws = websocket.WebSocketApp("wss://litecoinspace.org/api/v1/ws",
+    ws = websocket.WebSocketApp("wss://185.253.7.132:2323/api/v1/ws",
                               on_open=on_open,
                               on_message=on_message,
                               on_error=on_error,
@@ -1491,7 +1491,7 @@ export const restApiDocsData = [
 
         const address = '%{1}';
         // Note: This endpoint is not yet available in mempoolJS, use direct fetch:
-        const response = await fetch(\`https://litecoinspace.org/api/address/\${address}/utxo-hex\`);
+        const response = await fetch(\`http://185.253.7.132:2323/api/address/\${address}/utxo-hex\`);
         const addressUtxoHex = await response.json();
 
         document.getElementById("result").textContent = JSON.stringify(addressUtxoHex, undefined, 2);
@@ -1499,7 +1499,7 @@ export const restApiDocsData = [
           esModule: `
   // Note: This endpoint is not yet available in mempoolJS, use direct fetch:
   const address = '%{1}';
-  const response = await fetch(\`https://litecoinspace.org/api/address/\${address}/utxo-hex\`);
+  const response = await fetch(\`http://185.253.7.132:2323/api/address/\${address}/utxo-hex\`);
   const addressUtxoHex = await response.json();
   console.log(addressUtxoHex);
           `,
@@ -8871,7 +8871,7 @@ export const faqData = [
     category: "basics",
     showConditions: bitcoinNetworks,
     fragment: "what-is-svb",
-    title: "What is lit/vB?",
+    title: "What is catoshi/vB?",
   },
   {
     type: "category",
@@ -8962,7 +8962,7 @@ export const faqData = [
     category: "advanced",
     showConditions: bitcoinNetworks,
     fragment: "how-big-is-mempool-used-by-mempool-space",
-    title: "How big is the mempool used by litecoinspace.org?",
+    title: "How big is the mempool used by 185.253.7.132:2323?",
     options: { officialOnly: true },
   },
   {
