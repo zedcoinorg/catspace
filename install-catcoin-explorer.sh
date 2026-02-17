@@ -119,141 +119,117 @@ patch_electrs() {
   fi
 
   log "Patching electrs for Catcoin compatibility"
-  (cd "$ELECTRS_DIR" && git apply - <<'PATCH'
-diff --git a/src/chain.rs b/src/chain.rs
-index 1ad6b6d..1f6a5f7 100644
---- a/src/chain.rs
-+++ b/src/chain.rs
-@@ -31,6 +31,16 @@ impl Chain {
-         Self {
-             headers: vec![(genesis_hash, genesis.header)],
-             heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
-         }
-     }
-+
-+    // create an empty chain with a custom genesis header
-+    pub fn new_with_genesis(genesis: BlockHeader) -> Self {
-+        let genesis_hash = genesis.block_hash();
-+        Self {
-+            headers: vec![(genesis_hash, genesis)],
-+            heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
-+        }
-+    }
-diff --git a/src/daemon.rs b/src/daemon.rs
-index 6b611a2..0d9c8a1 100644
---- a/src/daemon.rs
-+++ b/src/daemon.rs
-@@ -1,7 +1,8 @@
- use anyhow::{Context, Result};
- 
-+use bitcoin::blockdata::block::Header as BlockHeader;
- use bitcoin::consensus::encode::serialize_hex;
--use bitcoin::{consensus::deserialize, hashes::hex::FromHex};
-+use bitcoin::{consensus::deserialize, hashes::hex::FromHex};
- use bitcoin::{Amount, BlockHash, Transaction, Txid};
- use bitcoincore_rpc::{json, jsonrpc, Auth, Client, RpcApi};
- use crossbeam_channel::Receiver;
-@@ -110,6 +111,15 @@ impl Daemon {
-         )?);
-         Ok(Self { p2p, rpc })
-     }
-+
-+    pub(crate) fn genesis_header(&self) -> Result<BlockHeader> {
-+        let genesis_hash = self.rpc.get_block_hash(0)?;
-+        let header_hex: String =
-+            self.rpc
-+                .call("getblockheader", &[json!(genesis_hash), json!(false)])?;
-+        let header_bytes = Vec::from_hex(&header_hex)?;
-+        let header: BlockHeader = deserialize(&header_bytes)?;
-+        Ok(header)
-+    }
-diff --git a/src/electrum.rs b/src/electrum.rs
-index 8c29962..c0c6a79 100644
---- a/src/electrum.rs
-+++ b/src/electrum.rs
-@@ -165,9 +165,10 @@ impl Rpc {
-             metrics::default_duration_buckets(),
-         );
- 
--        let tracker = Tracker::new(config, metrics)?;
-         let signal = Signal::new();
--        let daemon = Daemon::connect(config, signal.exit_flag(), tracker.metrics())?;
-+        let daemon = Daemon::connect(config, signal.exit_flag(), &metrics)?;
-+        let genesis = daemon.genesis_header()?;
-+        let tracker = Tracker::new(config, metrics, Some(genesis))?;
-         let cache = Cache::new(tracker.metrics());
-         Ok(Self {
-             tracker,
-diff --git a/src/p2p.rs b/src/p2p.rs
-index 3c3d128..f6dfc7c 100644
---- a/src/p2p.rs
-+++ b/src/p2p.rs
-@@ -325,7 +325,9 @@ fn build_version_message() -> NetworkMessage {
- 
-     NetworkMessage::Version(message_network::VersionMessage {
--        version: p2p::PROTOCOL_VERSION,
-+        // Catcoin requires a newer protocol version than rust-bitcoin's default.
-+        // Align with catcoind's protocolversion (70017).
-+        version: 70017,
-         services,
-         timestamp,
-         receiver: address::Address::new(&addr, services),
-@@ -382,10 +384,12 @@ impl RawNetworkMessage {
-             "pong" => ParsedNetworkMessage::Ignored, // unused
-             "addr" => ParsedNetworkMessage::Ignored, // unused
-             "alert" => ParsedNetworkMessage::Ignored, // https://bitcoin.org/en/alert/2016-11-01-alert-retirement
--            _ => bail!(
--                "unsupported message: command={}, payload={:?}",
--                self.cmd,
--                self.raw
--            ),
-+            _ => {
-+                debug!(
-+                    "ignoring unsupported message: command={}, payload={:?}",
-+                    self.cmd, self.raw
-+                );
-+                ParsedNetworkMessage::Ignored
-+            }
-         };
-         Ok(payload)
-     }
-diff --git a/src/tracker.rs b/src/tracker.rs
-index 2a50e3c..465b1f7 100644
---- a/src/tracker.rs
-+++ b/src/tracker.rs
-@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
- 
- use anyhow::{Context, Result};
--use bitcoin::{BlockHash, Txid};
-+use bitcoin::{blockdata::block::Header as BlockHeader, BlockHash, Txid};
- use bitcoin_slices::{bsl, Error::VisitBreak, Visit, Visitor};
- 
- use crate::{
-@@ -30,7 +30,11 @@ pub(crate) enum Error {
- }
- 
- impl Tracker {
--    pub fn new(config: &Config, metrics: Metrics) -> Result<Self> {
-+    pub fn new(
-+        config: &Config,
-+        metrics: Metrics,
-+        genesis: Option<BlockHeader>,
-+    ) -> Result<Self> {
-         let store = DBStore::open(
-             &config.db_path,
-             config.db_log_dir.as_deref(),
-@@ -38,7 +42,10 @@ impl Tracker {
-             config.db_parallelism,
-         )?;
--        let chain = Chain::new(config.network);
-+        let chain = match genesis {
-+            Some(header) => Chain::new_with_genesis(header),
-+            None => Chain::new(config.network),
-+        };
-         Ok(Self {
-             index: Index::load(
-                 store,
-PATCH
+  (cd "$ELECTRS_DIR" && python3 - <<'PY'
+import re
+from pathlib import Path
+
+def replace_once(path, pattern, repl):
+    data = Path(path).read_text()
+    new, count = re.subn(pattern, repl, data, flags=re.S)
+    if count == 0:
+        raise SystemExit(f"pattern not found in {path}")
+    Path(path).write_text(new)
+
+# chain.rs: add new_with_genesis
+chain = Path("src/chain.rs").read_text()
+if "new_with_genesis" not in chain:
+    replace_once(
+        "src/chain.rs",
+        r"(pub fn new\\(network: Network\\) -> Self \\{.*?\\n\\s*\\})",
+        r\"\"\"\\1
+
+    // create an empty chain with a custom genesis header
+    pub fn new_with_genesis(genesis: BlockHeader) -> Self {
+        let genesis_hash = genesis.block_hash();
+        Self {
+            headers: vec![(genesis_hash, genesis)],
+            heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
+        }
+    }\"\"\",
+    )
+
+# daemon.rs: add BlockHeader import + genesis_header
+daemon = Path("src/daemon.rs").read_text()
+if "genesis_header" not in daemon:
+    if "Header as BlockHeader" not in daemon:
+        replace_once(
+            "src/daemon.rs",
+            r"(use anyhow::\\{Context, Result\\};\\n\\n)",
+            r\"\"\"\\1use bitcoin::blockdata::block::Header as BlockHeader;
+\"\"\",
+        )
+    replace_once(
+        "src/daemon.rs",
+        r"(Ok\\(Self \\{ p2p, rpc \\}\\)\\n    \\})",
+        r\"\"\"\\1
+
+    pub(crate) fn genesis_header(&self) -> Result<BlockHeader> {
+        let genesis_hash = self.rpc.get_block_hash(0)?;
+        let header_hex: String =
+            self.rpc
+                .call("getblockheader", &[json!(genesis_hash), json!(false)])?;
+        let header_bytes = Vec::from_hex(&header_hex)?;
+        let header: BlockHeader = deserialize(&header_bytes)?;
+        Ok(header)
+    }\"\"\",
+    )
+
+# electrum.rs: wire genesis to tracker
+electrum = Path("src/electrum.rs").read_text()
+if "genesis_header" not in electrum:
+    replace_once(
+        "src/electrum.rs",
+        r\"\"\"\\s*let tracker = Tracker::new\\(config, metrics\\)\\?;\\n\\s*let signal = Signal::new\\(\\);\\n\\s*let daemon = Daemon::connect\\(config, signal.exit_flag\\(\\), tracker.metrics\\(\\)\\)\\?;\"\"\",
+        r\"\"\"        let signal = Signal::new();
+        let daemon = Daemon::connect(config, signal.exit_flag(), &metrics)?;
+        let genesis = daemon.genesis_header()?;
+        let tracker = Tracker::new(config, metrics, Some(genesis))?;\"\"\",
+    )
+
+# tracker.rs: add BlockHeader import + genesis param
+tracker = Path("src/tracker.rs").read_text()
+if "genesis: Option<BlockHeader>" not in tracker:
+    replace_once(
+        "src/tracker.rs",
+        r"use anyhow::\\{Context, Result\\};\\nuse bitcoin::\\{BlockHash, Txid\\};",
+        "use anyhow::{Context, Result};\\nuse bitcoin::{blockdata::block::Header as BlockHeader, BlockHash, Txid};",
+    )
+    replace_once(
+        "src/tracker.rs",
+        r\"\"\"pub fn new\\(config: &Config, metrics: Metrics\\) -> Result<Self> \\{\"\"\",
+        r\"\"\"pub fn new(
+        config: &Config,
+        metrics: Metrics,
+        genesis: Option<BlockHeader>,
+    ) -> Result<Self> {\"\"\",
+    )
+    replace_once(
+        "src/tracker.rs",
+        r"let chain = Chain::new\\(config.network\\);",
+        "let chain = match genesis {\\n            Some(header) => Chain::new_with_genesis(header),\\n            None => Chain::new(config.network),\\n        };",
+    )
+
+# p2p.rs: protocol version + ignore unknown messages
+p2p = Path("src/p2p.rs").read_text()
+if "version: 70017" not in p2p:
+    replace_once(
+        "src/p2p.rs",
+        r"version: p2p::PROTOCOL_VERSION,",
+        "// Catcoin requires a newer protocol version than rust-bitcoin's default.\\n        // Align with catcoind's protocolversion (70017).\\n        version: 70017,",
+    )
+if "ignoring unsupported message" not in p2p:
+    replace_once(
+        "src/p2p.rs",
+        r\"\"\"_ => bail!\\(\\n\\s*"unsupported message: command=\\{}, payload=\\{:\\?\\}",\\n\\s*self\\.cmd,\\n\\s*self\\.raw\\n\\s*\\),\"\"\",
+        r\"\"\"_ => {
+                debug!(
+                    "ignoring unsupported message: command={}, payload={:?}",
+                    self.cmd, self.raw
+                );
+                ParsedNetworkMessage::Ignored
+            },\"\"\",
+    )
+PY
   )
 }
 
