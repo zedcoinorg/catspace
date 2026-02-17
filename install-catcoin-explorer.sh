@@ -131,12 +131,27 @@ def replace_once(path, pattern, repl):
     Path(path).write_text(new)
 
 # chain.rs: add new_with_genesis
-chain = Path("src/chain.rs").read_text()
+chain_path = Path("src/chain.rs")
+chain = chain_path.read_text()
 if "new_with_genesis" not in chain:
-    replace_once(
-        "src/chain.rs",
-        r"(pub fn new\(network: Network\) -> Self \{.*?\n\s*\})",
-        """\\1
+    sig = "pub fn new(network: Network) -> Self {"
+    idx = chain.find(sig)
+    if idx == -1:
+        raise SystemExit("function signature not found in src/chain.rs")
+    brace_idx = chain.find("{", idx)
+    depth = 0
+    end = None
+    for i in range(brace_idx, len(chain)):
+        if chain[i] == "{":
+            depth += 1
+        elif chain[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end is None:
+        raise SystemExit("failed to locate end of Chain::new in src/chain.rs")
+    insert = """
 
     // create an empty chain with a custom genesis header
     pub fn new_with_genesis(genesis: BlockHeader) -> Self {
@@ -145,8 +160,9 @@ if "new_with_genesis" not in chain:
             headers: vec![(genesis_hash, genesis)],
             heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
         }
-    }""",
-    )
+    }"""
+    chain = chain[: end + 1] + insert + chain[end + 1 :]
+    chain_path.write_text(chain)
 
 # daemon.rs: add BlockHeader import + genesis_header
 daemon = Path("src/daemon.rs").read_text()
