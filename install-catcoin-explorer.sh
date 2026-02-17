@@ -135,8 +135,8 @@ chain = Path("src/chain.rs").read_text()
 if "new_with_genesis" not in chain:
     replace_once(
         "src/chain.rs",
-        r"(pub fn new\\(network: Network\\) -> Self \\{.*?\\n\\s*\\})",
-        r\"\"\"\\1
+        r"(pub fn new\(network: Network\) -> Self \{.*?\n\s*\})",
+        """\\1
 
     // create an empty chain with a custom genesis header
     pub fn new_with_genesis(genesis: BlockHeader) -> Self {
@@ -145,7 +145,7 @@ if "new_with_genesis" not in chain:
             headers: vec![(genesis_hash, genesis)],
             heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
         }
-    }\"\"\",
+    }""",
     )
 
 # daemon.rs: add BlockHeader import + genesis_header
@@ -154,14 +154,14 @@ if "genesis_header" not in daemon:
     if "Header as BlockHeader" not in daemon:
         replace_once(
             "src/daemon.rs",
-            r"(use anyhow::\\{Context, Result\\};\\n\\n)",
-            r\"\"\"\\1use bitcoin::blockdata::block::Header as BlockHeader;
-\"\"\",
+            r"(use anyhow::\{Context, Result\};\n\n)",
+            """\\1use bitcoin::blockdata::block::Header as BlockHeader;
+""",
         )
     replace_once(
         "src/daemon.rs",
-        r"(Ok\\(Self \\{ p2p, rpc \\}\\)\\n    \\})",
-        r\"\"\"\\1
+        r"(Ok\(Self \{ p2p, rpc \}\)\n    \})",
+        """\\1
 
     pub(crate) fn genesis_header(&self) -> Result<BlockHeader> {
         let genesis_hash = self.rpc.get_block_hash(0)?;
@@ -171,7 +171,7 @@ if "genesis_header" not in daemon:
         let header_bytes = Vec::from_hex(&header_hex)?;
         let header: BlockHeader = deserialize(&header_bytes)?;
         Ok(header)
-    }\"\"\",
+    }""",
     )
 
 # electrum.rs: wire genesis to tracker
@@ -179,11 +179,11 @@ electrum = Path("src/electrum.rs").read_text()
 if "genesis_header" not in electrum:
     replace_once(
         "src/electrum.rs",
-        r\"\"\"\\s*let tracker = Tracker::new\\(config, metrics\\)\\?;\\n\\s*let signal = Signal::new\\(\\);\\n\\s*let daemon = Daemon::connect\\(config, signal.exit_flag\\(\\), tracker.metrics\\(\\)\\)\\?;\"\"\",
-        r\"\"\"        let signal = Signal::new();
+        r"\s*let tracker = Tracker::new\(config, metrics\)\?;\n\s*let signal = Signal::new\(\);\n\s*let daemon = Daemon::connect\(config, signal.exit_flag\(\), tracker.metrics\(\)\)\?;",
+        """        let signal = Signal::new();
         let daemon = Daemon::connect(config, signal.exit_flag(), &metrics)?;
         let genesis = daemon.genesis_header()?;
-        let tracker = Tracker::new(config, metrics, Some(genesis))?;\"\"\",
+        let tracker = Tracker::new(config, metrics, Some(genesis))?;""",
     )
 
 # tracker.rs: add BlockHeader import + genesis param
@@ -191,22 +191,22 @@ tracker = Path("src/tracker.rs").read_text()
 if "genesis: Option<BlockHeader>" not in tracker:
     replace_once(
         "src/tracker.rs",
-        r"use anyhow::\\{Context, Result\\};\\nuse bitcoin::\\{BlockHash, Txid\\};",
-        "use anyhow::{Context, Result};\\nuse bitcoin::{blockdata::block::Header as BlockHeader, BlockHash, Txid};",
+        r"use anyhow::\{Context, Result\};\nuse bitcoin::\{BlockHash, Txid\};",
+        "use anyhow::{Context, Result};\nuse bitcoin::{blockdata::block::Header as BlockHeader, BlockHash, Txid};",
     )
     replace_once(
         "src/tracker.rs",
-        r\"\"\"pub fn new\\(config: &Config, metrics: Metrics\\) -> Result<Self> \\{\"\"\",
-        r\"\"\"pub fn new(
+        r"pub fn new\(config: &Config, metrics: Metrics\) -> Result<Self> \{",
+        """pub fn new(
         config: &Config,
         metrics: Metrics,
         genesis: Option<BlockHeader>,
-    ) -> Result<Self> {\"\"\",
+    ) -> Result<Self> {""",
     )
     replace_once(
         "src/tracker.rs",
-        r"let chain = Chain::new\\(config.network\\);",
-        "let chain = match genesis {\\n            Some(header) => Chain::new_with_genesis(header),\\n            None => Chain::new(config.network),\\n        };",
+        r"let chain = Chain::new\(config.network\);",
+        "let chain = match genesis {\n            Some(header) => Chain::new_with_genesis(header),\n            None => Chain::new(config.network),\n        };",
     )
 
 # p2p.rs: protocol version + ignore unknown messages
@@ -215,19 +215,19 @@ if "version: 70017" not in p2p:
     replace_once(
         "src/p2p.rs",
         r"version: p2p::PROTOCOL_VERSION,",
-        "// Catcoin requires a newer protocol version than rust-bitcoin's default.\\n        // Align with catcoind's protocolversion (70017).\\n        version: 70017,",
+        "// Catcoin requires a newer protocol version than rust-bitcoin's default.\n        // Align with catcoind's protocolversion (70017).\n        version: 70017,",
     )
 if "ignoring unsupported message" not in p2p:
     replace_once(
         "src/p2p.rs",
-        r\"\"\"_ => bail!\\(\\n\\s*"unsupported message: command=\\{}, payload=\\{:\\?\\}",\\n\\s*self\\.cmd,\\n\\s*self\\.raw\\n\\s*\\),\"\"\",
-        r\"\"\"_ => {
+        r"_ => bail!\(\n\s*\"unsupported message: command=\{}, payload=\{:\?\}\",\n\s*self\.cmd,\n\s*self\.raw\n\s*\),",
+        """_ => {
                 debug!(
                     "ignoring unsupported message: command={}, payload={:?}",
                     self.cmd, self.raw
                 );
                 ParsedNetworkMessage::Ignored
-            },\"\"\",
+            },""",
     )
 PY
   )
