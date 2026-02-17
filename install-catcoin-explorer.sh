@@ -119,7 +119,7 @@ patch_electrs() {
   fi
 
   log "Patching electrs for Catcoin compatibility"
-  (cd "$ELECTRS_DIR" && patch -p1 <<'PATCH'
+  (cd "$ELECTRS_DIR" && git apply - <<'PATCH'
 diff --git a/src/chain.rs b/src/chain.rs
 index 1ad6b6d..1f6a5f7 100644
 --- a/src/chain.rs
