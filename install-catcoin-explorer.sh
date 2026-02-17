@@ -103,9 +103,158 @@ install_packages() {
     curl git ca-certificates gnupg lsb-release \
     nginx rsync jq \
     mariadb-server mariadb-client \
-    build-essential pkg-config libssl-dev zlib1g-dev libsqlite3-dev \
+    build-essential pkg-config libssl-dev zlib1g-dev libsqlite3-dev patch \
+    clang llvm-dev libclang-dev \
     python3 python3-pip \
     certbot python3-certbot-nginx
+}
+
+patch_electrs() {
+  if [ ! -d "$ELECTRS_DIR" ]; then
+    return
+  fi
+  if [ -f "$ELECTRS_DIR/src/chain.rs" ] && grep -q "new_with_genesis" "$ELECTRS_DIR/src/chain.rs"; then
+    log "Electrs already patched"
+    return
+  fi
+
+  log "Patching electrs for Catcoin compatibility"
+  (cd "$ELECTRS_DIR" && patch -p1 <<'PATCH'
+diff --git a/src/chain.rs b/src/chain.rs
+index 1ad6b6d..1f6a5f7 100644
+--- a/src/chain.rs
++++ b/src/chain.rs
+@@ -31,6 +31,16 @@ impl Chain {
+         Self {
+             headers: vec![(genesis_hash, genesis.header)],
+             heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
+         }
+     }
++
++    // create an empty chain with a custom genesis header
++    pub fn new_with_genesis(genesis: BlockHeader) -> Self {
++        let genesis_hash = genesis.block_hash();
++        Self {
++            headers: vec![(genesis_hash, genesis)],
++            heights: std::iter::once((genesis_hash, 0)).collect(), // genesis header @ zero height
++        }
++    }
+diff --git a/src/daemon.rs b/src/daemon.rs
+index 6b611a2..0d9c8a1 100644
+--- a/src/daemon.rs
++++ b/src/daemon.rs
+@@ -1,7 +1,8 @@
+ use anyhow::{Context, Result};
+ 
++use bitcoin::blockdata::block::Header as BlockHeader;
+ use bitcoin::consensus::encode::serialize_hex;
+-use bitcoin::{consensus::deserialize, hashes::hex::FromHex};
++use bitcoin::{consensus::deserialize, hashes::hex::FromHex};
+ use bitcoin::{Amount, BlockHash, Transaction, Txid};
+ use bitcoincore_rpc::{json, jsonrpc, Auth, Client, RpcApi};
+ use crossbeam_channel::Receiver;
+@@ -110,6 +111,15 @@ impl Daemon {
+         )?);
+         Ok(Self { p2p, rpc })
+     }
++
++    pub(crate) fn genesis_header(&self) -> Result<BlockHeader> {
++        let genesis_hash = self.rpc.get_block_hash(0)?;
++        let header_hex: String =
++            self.rpc
++                .call("getblockheader", &[json!(genesis_hash), json!(false)])?;
++        let header_bytes = Vec::from_hex(&header_hex)?;
++        let header: BlockHeader = deserialize(&header_bytes)?;
++        Ok(header)
++    }
+diff --git a/src/electrum.rs b/src/electrum.rs
+index 8c29962..c0c6a79 100644
+--- a/src/electrum.rs
++++ b/src/electrum.rs
+@@ -165,9 +165,10 @@ impl Rpc {
+             metrics::default_duration_buckets(),
+         );
+ 
+-        let tracker = Tracker::new(config, metrics)?;
+         let signal = Signal::new();
+-        let daemon = Daemon::connect(config, signal.exit_flag(), tracker.metrics())?;
++        let daemon = Daemon::connect(config, signal.exit_flag(), &metrics)?;
++        let genesis = daemon.genesis_header()?;
++        let tracker = Tracker::new(config, metrics, Some(genesis))?;
+         let cache = Cache::new(tracker.metrics());
+         Ok(Self {
+             tracker,
+diff --git a/src/p2p.rs b/src/p2p.rs
+index 3c3d128..f6dfc7c 100644
+--- a/src/p2p.rs
++++ b/src/p2p.rs
+@@ -325,7 +325,9 @@ fn build_version_message() -> NetworkMessage {
+ 
+     NetworkMessage::Version(message_network::VersionMessage {
+-        version: p2p::PROTOCOL_VERSION,
++        // Catcoin requires a newer protocol version than rust-bitcoin's default.
++        // Align with catcoind's protocolversion (70017).
++        version: 70017,
+         services,
+         timestamp,
+         receiver: address::Address::new(&addr, services),
+@@ -382,10 +384,12 @@ impl RawNetworkMessage {
+             "pong" => ParsedNetworkMessage::Ignored, // unused
+             "addr" => ParsedNetworkMessage::Ignored, // unused
+             "alert" => ParsedNetworkMessage::Ignored, // https://bitcoin.org/en/alert/2016-11-01-alert-retirement
+-            _ => bail!(
+-                "unsupported message: command={}, payload={:?}",
+-                self.cmd,
+-                self.raw
+-            ),
++            _ => {
++                debug!(
++                    "ignoring unsupported message: command={}, payload={:?}",
++                    self.cmd, self.raw
++                );
++                ParsedNetworkMessage::Ignored
++            }
+         };
+         Ok(payload)
+     }
+diff --git a/src/tracker.rs b/src/tracker.rs
+index 2a50e3c..465b1f7 100644
+--- a/src/tracker.rs
++++ b/src/tracker.rs
+@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
+ 
+ use anyhow::{Context, Result};
+-use bitcoin::{BlockHash, Txid};
++use bitcoin::{blockdata::block::Header as BlockHeader, BlockHash, Txid};
+ use bitcoin_slices::{bsl, Error::VisitBreak, Visit, Visitor};
+ 
+ use crate::{
+@@ -30,7 +30,11 @@ pub(crate) enum Error {
+ }
+ 
+ impl Tracker {
+-    pub fn new(config: &Config, metrics: Metrics) -> Result<Self> {
++    pub fn new(
++        config: &Config,
++        metrics: Metrics,
++        genesis: Option<BlockHeader>,
++    ) -> Result<Self> {
+         let store = DBStore::open(
+             &config.db_path,
+             config.db_log_dir.as_deref(),
+@@ -38,7 +42,10 @@ impl Tracker {
+             config.db_parallelism,
+         )?;
+-        let chain = Chain::new(config.network);
++        let chain = match genesis {
++            Some(header) => Chain::new_with_genesis(header),
++            None => Chain::new(config.network),
++        };
+         Ok(Self {
+             index: Index::load(
+                 store,
+PATCH
+  )
 }
 
 install_node() {
@@ -158,8 +307,13 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-    systemctl daemon-reload
+  systemctl daemon-reload
+  if pgrep -x catcoind >/dev/null 2>&1; then
+    log "catcoind is already running; skipping service start"
+    systemctl enable catcoind.service
+  else
     systemctl enable --now catcoind.service
+  fi
   fi
 }
 
@@ -194,14 +348,24 @@ setup_electrum() {
   if [ -d "$ELECTRS_DIR/.git" ]; then
     (cd "$ELECTRS_DIR" && git pull --ff-only)
   fi
+  patch_electrs
   (cd "$ELECTRS_DIR" && cargo build --release)
   install -m 0755 "$ELECTRS_DIR/target/release/electrs" /usr/local/bin/electrs
 
   mkdir -p /var/lib/electrs
+  if [ ! -f "$CATCOIN_DATADIR/.cookie" ]; then
+    printf '%s:%s' "$RPC_USER" "$RPC_PASS" > "$CATCOIN_DATADIR/.cookie"
+    chmod 600 "$CATCOIN_DATADIR/.cookie"
+  fi
 
   local network_arg=""
   if [ -n "$ELECTRS_NETWORK" ]; then
     network_arg="--network=${ELECTRS_NETWORK}"
+  fi
+
+  local magic_arg=""
+  if [ -n "$ELECTRS_MAGIC" ]; then
+    magic_arg="--magic=${ELECTRS_MAGIC}"
   fi
 
   log "Creating systemd service for electrs"
@@ -218,8 +382,9 @@ ExecStart=/usr/local/bin/electrs \
   --daemon-rpc-addr=127.0.0.1:${RPC_PORT} \
   --daemon-p2p-addr=127.0.0.1:${P2P_PORT} \
   --electrum-rpc-addr=${ELECTRUM_HOST}:${ELECTRUM_PORT} \
-  --cookie=${RPC_USER}:${RPC_PASS} \
-  ${network_arg}
+  --cookie-file=${CATCOIN_DATADIR}/.cookie \
+  ${network_arg} \
+  ${magic_arg}
 Restart=always
 RestartSec=5
 
@@ -349,7 +514,90 @@ configure_frontend() {
 configure_nginx() {
   log "Configuring nginx"
   local conf="/etc/nginx/sites-available/${PUBLIC_HOST}.conf"
-  cat > "$conf" <<EOF
+
+  if [ "$PROTOCOL" = "https" ]; then
+    cat > "$conf" <<EOF
+server {
+  listen 80;
+  server_name ${PUBLIC_HOST};
+
+  location /.well-known/acme-challenge/ {
+    root ${WEB_ROOT};
+  }
+
+  return 301 https://${PUBLIC_HOST}\$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name ${PUBLIC_HOST};
+
+  ssl_certificate /etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${PUBLIC_HOST}/privkey.pem;
+  include /etc/letsencrypt/options-ssl-nginx.conf;
+  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+  set \$lang "en-US";
+
+  access_log /var/log/nginx/${PUBLIC_HOST}.access.log;
+  error_log /var/log/nginx/${PUBLIC_HOST}.error.log;
+
+  root ${WEB_ROOT};
+  index index.html;
+
+  add_header Cache-Control "public, no-transform";
+  add_header Vary Accept-Language;
+  add_header Vary Cookie;
+
+  location / {
+    try_files /\$lang/\$uri /\$lang/\$uri/ \$uri \$uri/ /en-US/\$uri @index-redirect;
+    expires 10m;
+  }
+
+  location /resources {
+    try_files \$uri @index-redirect;
+    expires 1h;
+  }
+
+  location /resources/config. {
+    try_files \$uri =404;
+    expires 5m;
+  }
+
+  location @index-redirect {
+    rewrite (.*) /\$lang/index.html;
+  }
+
+  location = /api {
+    try_files \$uri \$uri/ /en-US/index.html =404;
+  }
+  location = /api/ {
+    try_files \$uri \$uri/ /en-US/index.html =404;
+  }
+
+  location /api/v1/ws {
+    proxy_pass http://127.0.0.1:${BACKEND_PORT}/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "Upgrade";
+  }
+  location /api/v1 {
+    proxy_pass http://127.0.0.1:${BACKEND_PORT}/api/v1;
+  }
+  location /api/ {
+    proxy_pass http://127.0.0.1:${BACKEND_PORT}/api/v1/;
+  }
+
+  location /ws {
+    proxy_pass http://127.0.0.1:${BACKEND_PORT}/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "Upgrade";
+  }
+}
+EOF
+  else
+    cat > "$conf" <<EOF
 server {
   listen 80;
   server_name ${PUBLIC_HOST};
@@ -413,6 +661,7 @@ server {
   }
 }
 EOF
+  fi
 
   ln -sf "$conf" /etc/nginx/sites-enabled/${PUBLIC_HOST}.conf
   nginx -t
@@ -432,7 +681,7 @@ obtain_cert() {
   fi
 
   log "Obtaining Let's Encrypt certificate for ${PUBLIC_HOST}"
-  certbot --nginx -d "$PUBLIC_HOST" --non-interactive --agree-tos -m "$CERTBOT_EMAIL"
+  certbot certonly --webroot -w "$WEB_ROOT" -d "$PUBLIC_HOST" --non-interactive --agree-tos -m "$CERTBOT_EMAIL"
 }
 
 health_check() {
@@ -484,7 +733,8 @@ main() {
     fi
     prompt ELECTRS_REPO "Electrs repo URL (use your catcoin-compatible fork if needed)" "https://github.com/zedcoinorg/electrs"
     prompt ELECTRS_DIR "Electrs source directory" "/opt/electrs"
-    prompt ELECTRS_NETWORK "Electrs network name" "litecoin"
+    prompt_optional ELECTRS_NETWORK "Electrs network name (leave empty for default)" ""
+    prompt_optional ELECTRS_MAGIC "Electrs magic (hex, optional)" ""
   else
     ELECTRUM_HOST="127.0.0.1"
     ELECTRUM_PORT="50001"
@@ -518,8 +768,14 @@ main() {
   ensure_repo
   configure_backend
   configure_frontend
+  if [ "$PROTOCOL" = "https" ] && [ ! -f "/etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem" ]; then
+    log "Temporarily configuring HTTP to obtain certificate"
+    PROTOCOL="http"
+    configure_nginx
+    PROTOCOL="https"
+    obtain_cert
+  fi
   configure_nginx
-  obtain_cert
   health_check
 
   log "Done"
