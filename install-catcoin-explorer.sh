@@ -109,6 +109,37 @@ install_packages() {
     certbot python3-certbot-nginx
 }
 
+ensure_letsencrypt_tls_files() {
+  local opts="/etc/letsencrypt/options-ssl-nginx.conf"
+  local dhparams="/etc/letsencrypt/ssl-dhparams.pem"
+  if [ -f "$opts" ] && [ -f "$dhparams" ]; then
+    return
+  fi
+  mkdir -p /etc/letsencrypt
+
+  if [ ! -f "$opts" ]; then
+    for cand in \
+      /usr/lib/python3/dist-packages/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf \
+      /usr/lib/python3/dist-packages/certbot_nginx/tls_configs/options-ssl-nginx.conf; do
+      if [ -f "$cand" ]; then
+        cp "$cand" "$opts"
+        break
+      fi
+    done
+  fi
+
+  if [ ! -f "$dhparams" ]; then
+    for cand in \
+      /usr/lib/python3/dist-packages/certbot/_internal/tls_configs/ssl-dhparams.pem \
+      /usr/lib/python3/dist-packages/certbot/tls_configs/ssl-dhparams.pem; do
+      if [ -f "$cand" ]; then
+        cp "$cand" "$dhparams"
+        break
+      fi
+    done
+  fi
+}
+
 patch_electrs() {
   if [ ! -d "$ELECTRS_DIR" ]; then
     return
@@ -508,6 +539,7 @@ configure_nginx() {
   local conf="/etc/nginx/sites-available/${PUBLIC_HOST}.conf"
 
   if [ "$PROTOCOL" = "https" ]; then
+    ensure_letsencrypt_tls_files
     cat > "$conf" <<EOF
 server {
   listen 80;
